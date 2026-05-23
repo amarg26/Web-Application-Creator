@@ -180,20 +180,31 @@ export function TranscriptResultView({ result, onReset }: TranscriptResultProps)
                         </span>
                       </button>
 
-                      {/* Bullet points */}
+                      {/* Sub-sections with optional bold headings */}
                       {isOpen && (
-                        <ul className="px-5 pb-4 pt-1 space-y-2 bg-background/50">
-                          {section.bullets.map((bullet, j) => (
-                            <li
-                              key={j}
-                              className="flex gap-3 text-sm text-foreground/85 leading-relaxed"
-                              data-testid={`bullet-${i}-${j}`}
-                            >
-                              <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary/60 shrink-0" />
-                              <span>{bullet}</span>
-                            </li>
+                        <div className="px-5 pb-4 pt-1 space-y-4 bg-background/50">
+                          {section.subSections.map((sub, si) => (
+                            <div key={si} data-testid={`subsection-${i}-${si}`}>
+                              {sub.heading && (
+                                <p className="text-sm font-bold text-foreground mb-2 mt-1" data-testid={`subsection-heading-${i}-${si}`}>
+                                  {sub.heading}
+                                </p>
+                              )}
+                              <ul className="space-y-2">
+                                {sub.points.map((point, pi) => (
+                                  <li
+                                    key={pi}
+                                    className="flex gap-3 text-sm text-foreground/85 leading-relaxed"
+                                    data-testid={`point-${i}-${si}-${pi}`}
+                                  >
+                                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary/60 shrink-0" />
+                                    <span>{point}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       )}
                     </div>
                   );
