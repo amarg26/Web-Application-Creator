@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { TranscriptResult } from "@workspace/api-client-react/src/generated/api.schemas";
+import { TranscriptResult } from "@workspace/api-client-react";
 
 export interface HistoryItem extends TranscriptResult {
   savedAt: string;

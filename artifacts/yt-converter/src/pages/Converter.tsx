@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useFetchTranscript } from "@workspace/api-client-react";
-import { TranscriptResult } from "@workspace/api-client-react/src/generated/api.schemas";
+import { TranscriptResult } from "@workspace/api-client-react";
 import { useHistory } from "@/hooks/useHistory";
 import { UrlInput } from "@/components/UrlInput";
 import { TranscriptResultView } from "@/components/TranscriptResult";
@@ -32,8 +32,9 @@ export default function Converter() {
     }, 50);
   };
 
-  const errorMsg = fetchTranscript.error?.error || 
-    (fetchTranscript.error ? "Failed to convert video. Please try again." : null);
+  const errorMsg = fetchTranscript.error
+    ? ((fetchTranscript.error as { error?: string }).error ?? "Failed to convert video. Please try again.")
+    : null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
