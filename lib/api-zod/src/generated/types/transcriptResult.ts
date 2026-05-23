@@ -5,20 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
-
-export interface TranscriptRequest {
-  /** YouTube video URL or video ID */
-  url: string;
-}
-
-export interface TranscriptSegment {
-  text: string;
-  start: number;
-  duration: number;
-}
+import type { TranscriptSegment } from './transcriptSegment';
 
 export interface TranscriptResult {
   videoId: string;
@@ -30,8 +17,3 @@ export interface TranscriptResult {
   /** Total duration in seconds */
   duration: number;
 }
-
-export interface ErrorResponse {
-  error: string;
-}
-

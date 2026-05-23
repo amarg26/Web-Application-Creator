@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/yt-converter/"
+title = "YouTube to Text Converter"
+version = "1.0.0"
+id = "artifacts/yt-converter"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/yt-converter/" ]
+localPort = 24628
+
+[services.development]
+run = "pnpm --filter @workspace/yt-converter run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/yt-converter", "run", "build" ]
+publicDir = "artifacts/yt-converter/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24628"
+BASE_PATH = "/yt-converter/"

@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: transcript
+    description: YouTube transcript operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /transcript:
+    post:
+      operationId: fetchTranscript
+      tags: [transcript]
+      summary: Fetch YouTube transcript
+      description: Accepts a YouTube URL or video ID and returns the full transcript text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranscriptRequest"
+      responses:
+        "200":
+          description: Transcript fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptResult"
+        "400":
+          description: Invalid URL or missing video ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No transcript available for this video
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to fetch transcript
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +75,60 @@ components:
       required:
         - status
 
+    TranscriptRequest:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: YouTube video URL or video ID
+
+    TranscriptResult:
+      type: object
+      required:
+        - videoId
+        - title
+        - transcript
+        - segments
+        - wordCount
+        - duration
+      properties:
+        videoId:
+          type: string
+        title:
+          type: string
+        transcript:
+          type: string
+          description: Full plain-text transcript
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TranscriptSegment"
+        wordCount:
+          type: integer
+        duration:
+          type: number
+          description: Total duration in seconds
+
+    TranscriptSegment:
+      type: object
+      required:
+        - text
+        - start
+        - duration
+      properties:
+        text:
+          type: string
+        start:
+          type: number
+        duration:
+          type: number
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
