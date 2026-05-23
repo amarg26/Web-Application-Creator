@@ -1,0 +1,112 @@
+Create a modern, clean, and responsive web application called “DSA Revision Tracker” designed for working professional
+ preparing for coding interviews and filling the knowledge gap.
+
+TECH STACK:
+
+* Frontend: HTML, CSS (or Tailwind), JavaScript
+* Backend: Node.js with Express (or simple backend if needed)
+* Storage: Use browser localStorage (no database required)
+* UI should be minimal, clean, and mobile-friendly
+
+CORE FEATURES:
+
+1. ADD QUESTION FORM:
+    Include input fields:
+
+* Question Name (text)
+* Platform (dropdown: LeetCode, GFG, Codeforces, Other)
+* Topic Tags (multi-select or comma-separated: DP, Graph, Trees, Sliding Window, etc.)
+* Approach (short text / textarea)
+* Time Complexity (text input)
+* Confidence Level (1 to 5 dropdown)
+* Last Revised Date (date picker)
+* Mistake Notes (textarea)
+
+Include a “Save” button to store the entry.
+
+⸻
+
+2. DISPLAY QUESTIONS TABLE:
+    Show all saved questions in a clean table format with columns:
+
+* Question Name
+* Platform
+* Tags
+* Confidence Level
+* Last Revised
+* Next Revision (auto-calculated)
+* Actions (Edit/Delete)
+
+⸻
+
+3. SMART COLOR CODING:
+
+* Confidence 1–2 → Red background (Weak)
+* Confidence 3 → Yellow (Medium)
+* Confidence 4–5 → Green (Strong)
+
+⸻
+
+4. REVISION LOGIC (IMPORTANT):
+    Automatically calculate “Next Revision Date”:
+
+* Confidence 1 → +2 days
+* Confidence 2 → +3 days
+* Confidence 3 → +5 days
+* Confidence 4 → +7 days
+* Confidence 5 → +10 days
+
+Highlight rows where:
+
+* Next Revision Date ≤ Today → Show “Revise Now” badge
+
+⸻
+
+5. SEARCH & FILTER:
+
+* Search by question name
+* Filter by:
+    * Confidence Level
+    * Tags (e.g., DP, Graph)
+    * Platform
+
+⸻
+
+6. DASHBOARD SECTION:
+    At the top, show:
+
+* Total Questions Solved
+* Weak Questions Count (confidence ≤ 2)
+* Strong Questions Count (confidence ≥ 4)
+* Most frequent weak topic (based on tags)
+
+⸻
+
+7. MISTAKE TRACKING:
+    Display mistake notes when user clicks on a question.
+    Highlight repeated mistakes pattern if possible.
+
+⸻
+
+8. EDIT & DELETE FUNCTIONALITY:
+
+* Allow editing existing entries
+* Allow deleting entries
+
+⸻
+
+9. UI REQUIREMENTS:
+
+* Clean card-based layout
+* Use modern fonts and spacing
+* Add icons if possible
+* Smooth hover effects
+* Responsive design (works on mobile)
+
+⸻
+
+10. BONUS FEATURES (if possible):
+
+* Sort by “Next Revision Date”
+* Add a “Mark as Revised” button → updates Last Revised date to today
+* Dark mode toggle
