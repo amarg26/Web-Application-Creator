@@ -1,0 +1,1 @@
+- [YouTube transcript fetching](yt-transcript.md) — use `youtube-transcript` npm package; Innertube & timedtext URL approaches fail from Replit IPs without a real session.
