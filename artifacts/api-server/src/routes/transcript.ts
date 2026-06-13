@@ -252,14 +252,8 @@ router.post("/transcript", async (req, res) => {
       const data = (await resp.json()) as PlayerResponse;
       const status = data.playabilityStatus?.status;
 
-      // Hard failure: video truly doesn't exist
-      if (status === "ERROR") {
-        const reason = data.playabilityStatus?.reason ?? status;
-        res.status(404).json({ error: `Video unavailable: ${reason}` });
-        return;
-      }
-
-      // Soft failure: this client was blocked — try next
+      // Any non-OK status is a per-client soft failure — try next client.
+      // ERROR/UNPLAYABLE can be client-specific (not necessarily the video being unavailable).
       if (status !== "OK" && status !== "CONTENT_CHECK_REQUIRED") {
         lastBlockReason = data.playabilityStatus?.reason ?? status ?? "unknown";
         req.log.warn({ videoId, client: client.name, status, reason: lastBlockReason }, "Client blocked, trying next");
