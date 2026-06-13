@@ -1,5 +1,6 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { FetchTranscriptBody, FetchTranscriptResponse } from "@workspace/api-zod";
+import type { Logger } from "pino";
 
 const router: IRouter = Router();
 
@@ -41,8 +42,11 @@ const INNERTUBE_CLIENTS: InnertubeClient[] = [
 
 const INNERTUBE_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
 
-const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
-const CONSENT_COOKIE = "CONSENT=YES+cb.20210328-17-p0.en+FX+667; SOCS=CAESEwgDEgk0NjI3OBI";
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+
+// Consent cookies — SOCS=CAI= is the minimal "accept all" value YouTube accepts
+const CONSENT_COOKIE = "CONSENT=YES+cb; SOCS=CAI=";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -112,10 +116,9 @@ function parseInlineJson(html: string, varName: string): PlayerResponse | null {
   }
 }
 
-/** Parse YouTube transcript XML — handles both classic and srv3 formats */
+/** Parse YouTube transcript XML — handles both srv3 (`<p t="…" d="…">`) and classic (`<text start="…" dur="…">`) formats */
 function parseTranscriptXml(
-  xml: string,
-  lang: string
+  xml: string
 ): Array<{ text: string; start: number; duration: number }> {
   const results: Array<{ text: string; start: number; duration: number }> = [];
 
@@ -148,52 +151,83 @@ function decodeEntities(text: string): string {
 async function fetchCaptionXml(
   captionUrl: string,
   videoId: string,
+  log: Logger,
   extraCookies?: string
 ): Promise<string | null> {
   const cookieHeader = [CONSENT_COOKIE, extraCookies].filter(Boolean).join("; ");
 
-  const strategies: Record<string, string>[] = [
-    // Mobile Android UA — matches Innertube ANDROID context
-    { "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)" },
-    // Browser UA with cookies + referer
-    { "User-Agent": BROWSER_UA, "Cookie": cookieHeader, "Referer": `https://www.youtube.com/watch?v=${videoId}` },
-    // iOS UA
-    { "User-Agent": "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X)" },
-    // Browser UA, no cookies
-    { "User-Agent": BROWSER_UA, "Referer": `https://www.youtube.com/watch?v=${videoId}` },
+  const strategies: { label: string; headers: Record<string, string> }[] = [
+    { label: "android-ua", headers: { "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)" } },
+    { label: "browser+cookies", headers: { "User-Agent": BROWSER_UA, "Cookie": cookieHeader, "Referer": `https://www.youtube.com/watch?v=${videoId}` } },
+    { label: "ios-ua", headers: { "User-Agent": "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X)" } },
+    { label: "browser-no-cookies", headers: { "User-Agent": BROWSER_UA, "Referer": `https://www.youtube.com/watch?v=${videoId}` } },
   ];
 
-  for (const headers of strategies) {
+  for (const { label, headers } of strategies) {
     try {
       const res = await fetch(captionUrl, { headers });
-      if (!res.ok) continue;
-      const body = await res.text();
-      if (body && !body.trimStart().startsWith("<html") && !body.trimStart().startsWith("<!")) {
-        return body;
-      }
-    } catch { /* try next */ }
+      const body = res.ok ? await res.text() : "";
+      const isXml = body.length > 0 && !body.trimStart().startsWith("<html") && !body.trimStart().startsWith("<!");
+      log.info({ videoId, label, status: res.status, bodyLen: body.length, isXml }, "fetchCaptionXml attempt");
+      if (isXml) return body;
+    } catch (e) {
+      log.warn({ videoId, label, err: String(e) }, "fetchCaptionXml attempt threw");
+    }
   }
   return null;
 }
 
 /**
- * Fallback: fetch the YouTube watch page with browser headers + consent cookie,
+ * Fallback A: Public unsigned timedtext API — no session or signed URL needed.
+ * Tries several language/kind combos. Returns XML/VTT string on success, null on failure.
+ */
+async function fetchViaPublicTimedtext(videoId: string, log: Logger): Promise<string | null> {
+  const combos = [
+    { lang: "en", kind: "" },
+    { lang: "en", kind: "asr" },
+    { lang: "en-US", kind: "" },
+    { lang: "en-US", kind: "asr" },
+  ];
+
+  for (const { lang, kind } of combos) {
+    const qs = new URLSearchParams({ v: videoId, lang, fmt: "srv3" });
+    if (kind) qs.set("kind", kind);
+    const url = `https://www.youtube.com/api/timedtext?${qs.toString()}`;
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": BROWSER_UA, "Cookie": CONSENT_COOKIE },
+      });
+      const body = res.ok ? await res.text() : "";
+      const isXml = body.length > 0 && !body.trimStart().startsWith("<html") && !body.trimStart().startsWith("<!");
+      log.info({ videoId, lang, kind, status: res.status, bodyLen: body.length, isXml }, "fetchViaPublicTimedtext attempt");
+      if (isXml) return body;
+    } catch (e) {
+      log.warn({ videoId, lang, kind, err: String(e) }, "fetchViaPublicTimedtext attempt threw");
+    }
+  }
+  return null;
+}
+
+/**
+ * Fallback B: Fetch the YouTube watch page with browser headers + consent cookie,
  * capture the session cookies it sets, parse ytInitialPlayerResponse to get the
  * signed timedtext URL, then fetch it with those session cookies.
- * This bypasses Innertube IP blocks entirely.
  */
 async function fetchViaHtmlScraping(
-  videoId: string
+  videoId: string,
+  log: Logger
 ): Promise<{ playerData: PlayerResponse; sessionCookies: string } | null> {
   try {
-    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}&hl=en`, {
       headers: {
         "User-Agent": BROWSER_UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Cookie": CONSENT_COOKIE,
       },
     });
 
+    log.info({ videoId, httpStatus: res.status, ok: res.ok }, "HTML scraping: page fetch");
     if (!res.ok) return null;
 
     // Capture session cookies set by the page (needed for timedtext fetch)
@@ -201,14 +235,30 @@ async function fetchViaHtmlScraping(
     const sessionCookies = setCookie.map((c) => c.split(";")[0]!).join("; ");
 
     const html = await res.text();
-    if (html.includes('class="g-recaptcha"')) return null;
-    if (!html.includes('"playabilityStatus":')) return null;
+    const hasRecaptcha = html.includes('class="g-recaptcha"');
+    const hasConsent = html.includes("consent.youtube.com") || html.includes("CONSENT");
+    const hasPlayability = html.includes('"playabilityStatus":');
+    const hasCaptionTracks = html.includes('"captionTracks":');
+
+    log.info(
+      { videoId, htmlLen: html.length, hasRecaptcha, hasConsent, hasPlayability, hasCaptionTracks, cookieCount: setCookie.length },
+      "HTML scraping: page content"
+    );
+
+    if (hasRecaptcha) { log.warn({ videoId }, "HTML scraping: got recaptcha page"); return null; }
+    if (!hasPlayability) { log.warn({ videoId }, "HTML scraping: no playabilityStatus in HTML"); return null; }
 
     const playerData = parseInlineJson(html, "ytInitialPlayerResponse");
+    const parsedStatus = playerData?.playabilityStatus?.status;
+    const trackCount = playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length ?? 0;
+
+    log.info({ videoId, parsedOk: !!playerData, parsedStatus, trackCount }, "HTML scraping: JSON parse result");
+
     if (!playerData) return null;
 
     return { playerData, sessionCookies };
-  } catch {
+  } catch (e) {
+    log.error({ videoId, err: String(e) }, "HTML scraping: unexpected error");
     return null;
   }
 }
@@ -229,6 +279,8 @@ router.post("/transcript", async (req, res) => {
     res.status(400).json({ error: "Could not extract a valid YouTube video ID from the provided URL." });
     return;
   }
+
+  const log: Logger = req.log as Logger;
 
   try {
     let playerData: PlayerResponse | null = null;
@@ -256,29 +308,53 @@ router.post("/transcript", async (req, res) => {
       // ERROR/UNPLAYABLE can be client-specific (not necessarily the video being unavailable).
       if (status !== "OK" && status !== "CONTENT_CHECK_REQUIRED") {
         lastBlockReason = data.playabilityStatus?.reason ?? status ?? "unknown";
-        req.log.warn({ videoId, client: client.name, status, reason: lastBlockReason }, "Client blocked, trying next");
+        log.warn({ videoId, client: client.name, status, reason: lastBlockReason }, "Client blocked, trying next");
         continue;
       }
 
       const tracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-      if (!Array.isArray(tracks) || tracks.length === 0) continue;
+      if (!Array.isArray(tracks) || tracks.length === 0) {
+        log.info({ videoId, client: client.name }, "Client OK but no captionTracks");
+        continue;
+      }
 
       playerData = data;
-      req.log.info({ videoId, client: client.name }, "Innertube client succeeded");
+      log.info({ videoId, client: client.name }, "Innertube client succeeded");
       break;
     }
 
-    // ── 2. HTML scraping fallback (bypasses Innertube IP blocks) ─────────────
+    // ── 2. Public unsigned timedtext API fallback ─────────────────────────────
     if (!playerData) {
-      req.log.info({ videoId }, "All Innertube clients failed, trying HTML scraping");
-      const scraped = await fetchViaHtmlScraping(videoId);
+      log.info({ videoId }, "Trying public unsigned timedtext API");
+      const xml = await fetchViaPublicTimedtext(videoId, log);
+      if (xml) {
+        const segments = parseTranscriptXml(xml);
+        if (segments.length > 0) {
+          log.info({ videoId, segments: segments.length }, "Public timedtext API succeeded");
+          const transcript = segments.map((s) => s.text).join(" ").replace(/\s+/g, " ").trim();
+          const wordCount = transcript.split(/\s+/).filter(Boolean).length;
+          const lastSeg = segments[segments.length - 1]!;
+          const duration = lastSeg.start + lastSeg.duration;
+          const data = FetchTranscriptResponse.parse({ videoId, title: `YouTube Video ${videoId}`, transcript, segments, wordCount, duration });
+          res.json(data);
+          return;
+        }
+      }
+    }
+
+    // ── 3. HTML scraping fallback (bypasses Innertube IP blocks) ─────────────
+    if (!playerData) {
+      log.info({ videoId }, "Trying HTML scraping fallback");
+      const scraped = await fetchViaHtmlScraping(videoId, log);
 
       if (scraped) {
         const tracks = scraped.playerData.captions?.playerCaptionsTracklistRenderer?.captionTracks;
         if (Array.isArray(tracks) && tracks.length > 0) {
           playerData = scraped.playerData;
           sessionCookies = scraped.sessionCookies;
-          req.log.info({ videoId }, "HTML scraping succeeded");
+          log.info({ videoId }, "HTML scraping: got playerData with captionTracks");
+        } else {
+          log.warn({ videoId }, "HTML scraping: playerData parsed but no captionTracks");
         }
       }
     }
@@ -296,7 +372,7 @@ router.post("/transcript", async (req, res) => {
       return;
     }
 
-    // ── 3. Select the best English caption track ──────────────────────────────
+    // ── 4. Select the best English caption track ──────────────────────────────
     const captionTracks = playerData.captions!.playerCaptionsTracklistRenderer!.captionTracks!;
     const title = playerData.videoDetails?.title ?? `YouTube Video ${videoId}`;
     const durationSec = parseInt(playerData.videoDetails?.lengthSeconds ?? "0", 10);
@@ -313,8 +389,9 @@ router.post("/transcript", async (req, res) => {
 
     captionUrl = track.baseUrl;
 
-    // ── 4. Fetch caption XML ─────────────────────────────────────────────────
-    const captionXml = await fetchCaptionXml(captionUrl, videoId, sessionCookies);
+    // ── 5. Fetch caption XML ─────────────────────────────────────────────────
+    log.info({ videoId, captionUrlLen: captionUrl.length }, "Fetching caption XML");
+    const captionXml = await fetchCaptionXml(captionUrl, videoId, log, sessionCookies);
 
     if (!captionXml) {
       res.status(503).json({
@@ -323,8 +400,8 @@ router.post("/transcript", async (req, res) => {
       return;
     }
 
-    // ── 5. Parse and respond ─────────────────────────────────────────────────
-    const segments = parseTranscriptXml(captionXml, track.languageCode ?? "en");
+    // ── 6. Parse and respond ─────────────────────────────────────────────────
+    const segments = parseTranscriptXml(captionXml);
 
     if (segments.length === 0) {
       res.status(404).json({ error: "No transcript content found for this video." });
@@ -340,7 +417,7 @@ router.post("/transcript", async (req, res) => {
     res.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    req.log.error({ err, videoId }, "Failed to fetch transcript");
+    log.error({ err, videoId }, "Failed to fetch transcript");
 
     if (message.toLowerCase().includes("unavailable")) {
       res.status(404).json({ error: message });
