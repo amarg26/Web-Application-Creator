@@ -1,8 +1,16 @@
-import { Router, type IRouter, type Request } from "express";
+import { Router, type IRouter } from "express";
 import { FetchTranscriptBody, FetchTranscriptResponse } from "@workspace/api-zod";
 import type { Logger } from "pino";
 
 const router: IRouter = Router();
+
+// ---------------------------------------------------------------------------
+// Proxy — when YT_PROXY_URL is set, all Innertube/timedtext calls are routed
+// through a Cloudflare Worker (bypasses YouTube's GCP IP block).
+// See artifacts/yt-proxy-worker/README.md for setup instructions.
+// ---------------------------------------------------------------------------
+
+const PROXY_URL = process.env["YT_PROXY_URL"]?.replace(/\/$/, "") ?? null;
 
 // ---------------------------------------------------------------------------
 // Innertube client definitions — tried in order until one works
@@ -17,7 +25,7 @@ interface InnertubeClient {
 const INNERTUBE_CLIENTS: InnertubeClient[] = [
   {
     name: "ANDROID",
-    context: { client: { clientName: "ANDROID", clientVersion: "20.10.38" } },
+    context: { client: { clientName: "ANDROID", clientVersion: "20.10.38", androidSdkVersion: 34, osName: "Android", osVersion: "14", platform: "MOBILE", hl: "en", gl: "US", clientFormFactor: "SMALL_FORM_FACTOR" } },
     userAgent: "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
   },
   {
@@ -40,7 +48,12 @@ const INNERTUBE_CLIENTS: InnertubeClient[] = [
   },
 ];
 
-const INNERTUBE_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
+// Resolved at request time: direct YouTube URL, or proxied URL
+function playerUrl(): string {
+  return PROXY_URL
+    ? `${PROXY_URL}/player`
+    : "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
+}
 
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
@@ -146,7 +159,8 @@ function decodeEntities(text: string): string {
 
 /**
  * Fetch the caption XML from a signed timedtext URL.
- * Tries multiple User-Agent strategies. Returns XML string on success, null on failure.
+ * If YT_PROXY_URL is set, proxies through the Cloudflare Worker (bypasses GCP IP block).
+ * Otherwise tries multiple direct User-Agent strategies.
  */
 async function fetchCaptionXml(
   captionUrl: string,
@@ -154,8 +168,26 @@ async function fetchCaptionXml(
   log: Logger,
   extraCookies?: string
 ): Promise<string | null> {
-  const cookieHeader = [CONSENT_COOKIE, extraCookies].filter(Boolean).join("; ");
+  // Proxy path — single call through the Cloudflare Worker
+  if (PROXY_URL) {
+    try {
+      const res = await fetch(`${PROXY_URL}/timedtext`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: captionUrl, videoId }),
+      });
+      const body = res.ok ? await res.text() : "";
+      const isXml = body.length > 0 && !body.trimStart().startsWith("<html") && !body.trimStart().startsWith("<!");
+      log.info({ videoId, status: res.status, bodyLen: body.length, isXml }, "fetchCaptionXml via proxy");
+      if (isXml) return body;
+    } catch (e) {
+      log.warn({ videoId, err: String(e) }, "fetchCaptionXml proxy threw");
+    }
+    return null;
+  }
 
+  // Direct path — try several UA strategies
+  const cookieHeader = [CONSENT_COOKIE, extraCookies].filter(Boolean).join("; ");
   const strategies: { label: string; headers: Record<string, string> }[] = [
     { label: "android-ua", headers: { "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)" } },
     { label: "browser+cookies", headers: { "User-Agent": BROWSER_UA, "Cookie": cookieHeader, "Referer": `https://www.youtube.com/watch?v=${videoId}` } },
@@ -292,7 +324,7 @@ router.post("/transcript", async (req, res) => {
     for (const client of INNERTUBE_CLIENTS) {
       let resp: Response;
       try {
-        resp = await fetch(INNERTUBE_URL, {
+        resp = await fetch(playerUrl(), {
           method: "POST",
           headers: { "Content-Type": "application/json", "User-Agent": client.userAgent },
           body: JSON.stringify({ context: client.context, videoId }),

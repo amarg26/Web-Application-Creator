@@ -1,1 +1,1 @@
-- [YouTube transcript fetching](yt-transcript.md) — use `youtube-transcript` npm package; Innertube & timedtext URL approaches fail from Replit IPs without a real session.
+- [YouTube transcript fetching](yt-transcript.md) — GCP Cloud Run IPs are blocked by YouTube; Cloudflare Worker proxy is the required fix.
