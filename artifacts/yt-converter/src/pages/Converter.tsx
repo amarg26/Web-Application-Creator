@@ -33,7 +33,11 @@ export default function Converter() {
   };
 
   const errorMsg = fetchTranscript.error
-    ? ((fetchTranscript.error as { error?: string }).error ?? "Failed to convert video. Please try again.")
+    ? (
+        (fetchTranscript.error as unknown as { data?: { error?: string } }).data?.error ??
+        fetchTranscript.error.message ??
+        "Failed to convert video. Please try again."
+      )
     : null;
 
   return (
