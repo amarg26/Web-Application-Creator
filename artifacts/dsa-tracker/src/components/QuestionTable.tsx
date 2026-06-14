@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { Edit2, Trash2, CheckSquare, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
@@ -66,7 +66,7 @@ export function QuestionTable({ questions, onDelete, onRevise }: QuestionTablePr
             const isExpanded = expandedRows.has(q.id);
 
             return (
-              <React.Fragment key={q.id}>
+              <Fragment key={q.id}>
                 <TableRow className={cn("group cursor-pointer", isExpanded && "border-b-0 bg-muted/20")} onClick={() => toggleRow(q.id)} data-testid={`row-${q.id}`}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ export function QuestionTable({ questions, onDelete, onRevise }: QuestionTablePr
                   </TableCell>
                   <TableCell>
                     <div className={cn(
-                      "font-mono text-xs px-2 py-1 rounded-md inline-flex items-center gap-1.5", 
+                      "font-mono text-xs px-2 py-1 rounded-md inline-flex items-center gap-1.5",
                       isOverdue ? "bg-red-500/10 text-red-500 border border-red-500/20" : "text-muted-foreground"
                     )}>
                       {isOverdue && <AlertCircle className="h-3 w-3" />}
@@ -106,10 +106,10 @@ export function QuestionTable({ questions, onDelete, onRevise }: QuestionTablePr
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        className={cn("h-8 w-8", isOverdue && "border-primary text-primary hover:bg-primary/10")} 
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className={cn("h-8 w-8", isOverdue && "border-primary text-primary hover:bg-primary/10")}
                         onClick={() => onRevise(q.id)}
                         title="Mark as Revised"
                         data-testid={`btn-revise-${q.id}`}
@@ -132,14 +132,14 @@ export function QuestionTable({ questions, onDelete, onRevise }: QuestionTablePr
                         <div>
                           <h4 className="font-semibold mb-1 text-xs uppercase tracking-wider text-muted-foreground">Approach</h4>
                           <p className="whitespace-pre-wrap text-foreground/80 font-mono text-xs bg-background/50 p-2 rounded border border-border/50">{q.approach || "No approach logged."}</p>
-                          
+
                           <h4 className="font-semibold mt-3 mb-1 text-xs uppercase tracking-wider text-muted-foreground">Time Complexity</h4>
                           <code className="text-primary bg-primary/10 px-1.5 py-0.5 rounded text-xs">{q.timeComplexity || "O(?)"}</code>
                         </div>
                         <div>
                           <h4 className="font-semibold mb-1 text-xs uppercase tracking-wider text-muted-foreground">Mistake Notes</h4>
                           <p className="whitespace-pre-wrap text-foreground/80 font-mono text-xs bg-red-500/5 p-2 rounded border border-red-500/10 text-red-400">{q.mistakeNotes || "No mistakes noted."}</p>
-                          
+
                           <div className="mt-3 flex flex-wrap gap-1">
                             <h4 className="w-full font-semibold mb-1 text-xs uppercase tracking-wider text-muted-foreground">All Tags</h4>
                             {q.tags.map(tag => (
@@ -151,7 +151,7 @@ export function QuestionTable({ questions, onDelete, onRevise }: QuestionTablePr
                     </TableCell>
                   </TableRow>
                 )}
-              </React.Fragment>
+              </Fragment>
             );
           })}
         </TableBody>
