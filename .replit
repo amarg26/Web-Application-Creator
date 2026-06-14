@@ -34,3 +34,8 @@ externalPort = 3000
 [[ports]]
 localPort = 24628
 externalPort = 3001
+
+[userenv]
+
+[userenv.shared]
+YT_PROXY_URL = "https://green-star-db6b.amar-ghodke30.workers.dev"
