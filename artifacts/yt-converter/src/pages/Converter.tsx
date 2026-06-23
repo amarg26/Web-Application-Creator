@@ -22,23 +22,72 @@ const handleConvert = async (url: string) => {
     return;
   }
 
+  const WORKER_URL = 'https://yttextconverter.amar-ghodke30.workers.dev';
+
   try {
-    const response = await fetch('https://yttextconverter.amar-ghodke30.workers.dev/captions', {
+    // Step 1: Get player data with caption tracks
+    const playerRes = await fetch(`${WORKER_URL}/player`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoId })
+      body: JSON.stringify({
+        videoId,
+        context: {
+          client: {
+            clientName: "ANDROID",
+            clientVersion: "19.09.37",
+            androidSdkVersion: 34,
+            hl: "en",
+            gl: "US"
+          }
+        }
+      })
     });
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    
-    const result = await response.json();
+    if (!playerRes.ok) throw new Error(`Player HTTP ${playerRes.status}`);
+    const playerData = await playerRes.json();
+
+    // Extract caption track URL from player response
+    const captions = playerData?.captions?.captionTracks;
+    if (!captions || captions.length === 0) {
+      throw new Error('No captions available for this video');
+    }
+
+    // Pick first available caption (usually English auto-generated)
+    const captionUrl = captions[0].baseUrl;
+
+    // Step 2: Fetch the actual transcript XML
+    const textRes = await fetch(`${WORKER_URL}/timedtext`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: captionUrl, videoId })
+    });
+
+    if (!textRes.ok) throw new Error(`Timedtext HTTP ${textRes.status}`);
+    const xmlText = await textRes.text();
+
+    // Parse XML to plain text (basic parser)
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+    const texts = xmlDoc.querySelectorAll('text');
+    const transcript = Array.from(texts).map(t => t.textContent).join(' ');
+
+    const result = {
+      videoId,
+      title: playerData?.videoDetails?.title || 'Unknown',
+      transcript,
+      captions: Array.from(texts).map((t, i) => ({
+        start: t.getAttribute('start'),
+        duration: t.getAttribute('dur'),
+        text: t.textContent
+      }))
+    };
+
     setActiveResult(result);
     addToHistory(result);
   } catch (err: any) {
     alert(err.message || 'Failed to fetch transcript');
   }
 };
-
 
   const handleHistorySelect = (item: TranscriptResult) => {
     setActiveResult(null);
