@@ -13,15 +13,32 @@ export default function Converter() {
   const { history, addToHistory, clearHistory } = useHistory();
   const fetchTranscript = useFetchTranscript();
 
-  const handleConvert = (url: string) => {
-    setActiveResult(null);
-    fetchTranscript.mutate({ data: { url } }, {
-      onSuccess: (result) => {
-        setActiveResult(result);
-        addToHistory(result);
-      }
+const handleConvert = async (url: string) => {
+  setActiveResult(null);
+  
+  const videoId = extractVideoId(url);
+  if (!videoId) {
+    alert('Invalid YouTube URL');
+    return;
+  }
+
+  try {
+    const response = await fetch('https://yttextconverter.amar-ghodke30.workers.dev/captions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoId })
     });
-  };
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const result = await response.json();
+    setActiveResult(result);
+    addToHistory(result);
+  } catch (err: any) {
+    alert(err.message || 'Failed to fetch transcript');
+  }
+};
+
 
   const handleHistorySelect = (item: TranscriptResult) => {
     setActiveResult(null);
