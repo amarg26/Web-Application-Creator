@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useFetchTranscript } from "@workspace/api-client-react";
 import { TranscriptResult } from "@workspace/api-client-react";
 import { useHistory } from "@/hooks/useHistory";
 import { UrlInput } from "@/components/UrlInput";
@@ -10,101 +9,93 @@ import { extractVideoId } from "@/lib/utils/format";
 
 export default function Converter() {
   const [activeResult, setActiveResult] = useState<TranscriptResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { history, addToHistory, clearHistory } = useHistory();
-  const fetchTranscript = useFetchTranscript();
 
-const handleConvert = async (url: string) => {
-  setActiveResult(null);
-  
-  const videoId = extractVideoId(url);
-  if (!videoId) {
-    alert('Invalid YouTube URL');
-    return;
-  }
-
-  const WORKER_URL = 'https://yttextconverter.amar-ghodke30.workers.dev';
-
-  try {
-    // Step 1: Get player data with caption tracks
-    const playerRes = await fetch(`${WORKER_URL}/player`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        videoId,
-        context: {
-          client: {
-            clientName: "ANDROID",
-            clientVersion: "19.09.37",
-            androidSdkVersion: 34,
-            hl: "en",
-            gl: "US"
-          }
-        }
-      })
-    });
-
-    if (!playerRes.ok) throw new Error(`Player HTTP ${playerRes.status}`);
-    const playerData = await playerRes.json();
-
-    // Extract caption track URL from player response
-    const captions = playerData?.captions?.captionTracks;
-    if (!captions || captions.length === 0) {
-      throw new Error('No captions available for this video');
+  const handleConvert = async (url: string) => {
+    setActiveResult(null);
+    setError(null);
+    setIsLoading(true);
+    
+    const videoId = extractVideoId(url);
+    if (!videoId) {
+      setError('Invalid YouTube URL');
+      setIsLoading(false);
+      return;
     }
 
-    // Pick first available caption (usually English auto-generated)
-    const captionUrl = captions[0].baseUrl;
+    const WORKER_URL = 'https://yttextconverter.amar-ghodke30.workers.dev';
 
-    // Step 2: Fetch the actual transcript XML
-    const textRes = await fetch(`${WORKER_URL}/timedtext`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: captionUrl, videoId })
-    });
+    try {
+      const playerRes = await fetch(`${WORKER_URL}/player`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          context: {
+            client: {
+              clientName: "ANDROID",
+              clientVersion: "19.09.37",
+              androidSdkVersion: 34,
+              hl: "en",
+              gl: "US"
+            }
+          }
+        })
+      });
 
-    if (!textRes.ok) throw new Error(`Timedtext HTTP ${textRes.status}`);
-    const xmlText = await textRes.text();
+      if (!playerRes.ok) throw new Error(`Player HTTP ${playerRes.status}`);
+      const playerData = await playerRes.json();
 
-    // Parse XML to plain text (basic parser)
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-    const texts = xmlDoc.querySelectorAll('text');
-    const transcript = Array.from(texts).map(t => t.textContent).join(' ');
+      const captions = playerData?.captions?.captionTracks;
+      if (!captions || captions.length === 0) {
+        throw new Error('No captions available for this video');
+      }
 
-    const result = {
-      videoId,
-      title: playerData?.videoDetails?.title || 'Unknown',
-      transcript,
-      captions: Array.from(texts).map((t, i) => ({
-        start: t.getAttribute('start'),
-        duration: t.getAttribute('dur'),
-        text: t.textContent
-      }))
-    };
+      const captionUrl = captions[0].baseUrl;
 
-    setActiveResult(result);
-    addToHistory(result);
-  } catch (err: any) {
-    alert(err.message || 'Failed to fetch transcript');
-  }
-};
+      const textRes = await fetch(`${WORKER_URL}/timedtext`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: captionUrl, videoId })
+      });
+
+      if (!textRes.ok) throw new Error(`Timedtext HTTP ${textRes.status}`);
+      const xmlText = await textRes.text();
+
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+      const texts = xmlDoc.querySelectorAll('text');
+      const transcript = Array.from(texts).map(t => t.textContent).join(' ');
+
+      const result = {
+        videoId,
+        title: playerData?.videoDetails?.title || 'Unknown',
+        transcript,
+        captions: Array.from(texts).map((t) => ({
+          start: t.getAttribute('start'),
+          duration: t.getAttribute('dur'),
+          text: t.textContent
+        }))
+      };
+
+      setActiveResult(result);
+      addToHistory(result);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch transcript');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleHistorySelect = (item: TranscriptResult) => {
     setActiveResult(null);
-    // Slight delay to allow transition
     setTimeout(() => {
       setActiveResult(item);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 50);
   };
-
-  const errorMsg = fetchTranscript.error
-    ? (
-        (fetchTranscript.error as unknown as { data?: { error?: string } }).data?.error ??
-        fetchTranscript.error.message ??
-        "Failed to convert video. Please try again."
-      )
-    : null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -128,8 +119,8 @@ const handleConvert = async (url: string) => {
 
         <UrlInput 
           onSubmit={handleConvert} 
-          isLoading={fetchTranscript.isPending} 
-          error={errorMsg}
+          isLoading={isLoading} 
+          error={error}
         />
 
         {activeResult ? (
