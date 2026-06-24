@@ -39,8 +39,7 @@ const handleConvert = async (url: string) => {
     return;
   }
 
-  // REPLACE THIS with your actual Render URL after deployment
-  const API_URL = 'https://your-app.onrender.com/transcript';
+  const API_URL = 'https://web-application-creator-m3s2.onrender.com/transcript';
 
   try {
     const response = await fetch(API_URL, {
