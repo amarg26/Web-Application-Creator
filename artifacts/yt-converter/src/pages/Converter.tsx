@@ -27,26 +27,46 @@ const handleConvert = async (url: string) => {
     return;
   }
 
-  try {
-    // Get video metadata (title, description only - NO captions)
-    const metaRes = await fetch(`https://yt.lemnoslife.com/videos?part=snippet,contentDetails&id=${videoId}`);
-    if (!metaRes.ok) throw new Error(`Metadata HTTP ${metaRes.status}`);
-    const metaData = await metaRes.json();
-    
-    const video = metaData.items?.[0];
-    if (!video) throw new Error('Video not found');
+const handleConvert = async (url: string) => {
+  setActiveResult(null);
+  setError(null);
+  setIsLoading(true);
+  
+  const videoId = extractVideoId(url);
+  if (!videoId) {
+    setError('Invalid YouTube URL');
+    setIsLoading(false);
+    return;
+  }
 
+  // REPLACE THIS with your actual Render URL after deployment
+  const API_URL = 'https://your-app.onrender.com/transcript';
+
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoId })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
     const result = {
       videoId,
-      title: video.snippet?.title || 'Unknown',
-      transcript: video.snippet?.description || 'No transcript available via this API',
-      captions: []
+      title: data.title || 'Unknown',
+      transcript: data.transcript || '',
+      captions: data.captions || []
     };
 
     setActiveResult(result);
     addToHistory(result);
   } catch (err: any) {
-    setError(err.message || 'Failed to fetch video info');
+    setError(err.message || 'Failed to fetch transcript');
   } finally {
     setIsLoading(false);
   }
