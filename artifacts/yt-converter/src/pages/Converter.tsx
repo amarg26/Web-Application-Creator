@@ -49,7 +49,6 @@ const handleConvert = async (url: string) => {
     });
 
     if (!response.ok) {
-      const err = await response.text();
       throw new Error(`Server error: ${response.status}`);
     }
 
@@ -70,7 +69,6 @@ const handleConvert = async (url: string) => {
     setIsLoading(false);
   }
 };
-
 
   const handleHistorySelect = (item: TranscriptResult) => {
     setActiveResult(null);
