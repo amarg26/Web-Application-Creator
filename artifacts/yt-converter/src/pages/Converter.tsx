@@ -30,28 +30,22 @@ const handleConvert = async (url: string) => {
   const WORKER_URL = 'https://yttextconverter.amar-ghodke30.workers.dev';
 
   try {
-    const playerRes = await fetch(`${WORKER_URL}/player`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        videoId,
-        context: {
-          client: {
-            clientName: "WEB",
-            clientVersion: "2.20240623.00.00",
-            hl: "en",
-            gl: "US"
-          }
-        },
-        playbackContext: {
-          contentPlaybackContext: {
-            html5Preference: "HTML5_PREF_WANTS"
-          }
-        },
-        contentCheckOk: true,
-        racyCheckOk: true
-      })
-    });
+        const playerRes = await fetch(`${WORKER_URL}/player`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoId,
+            context: {
+              client: {
+                clientName: "WEB_EMBEDDED_PLAYER",
+                clientVersion: "1.20240101.00.00",
+                hl: "en",
+                gl: "US",
+                platform: "DESKTOP"
+              }
+            }
+          })
+        });
 
     if (!playerRes.ok) {
       const errorText = await playerRes.text();
