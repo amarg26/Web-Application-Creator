@@ -15,41 +15,48 @@ export default function Converter() {
   const [error, setError] = useState<string | null>(null);
   const { history, addToHistory, clearHistory } = useHistory();
 
-  const handleConvert = async (url: string) => {
-    setActiveResult(null);
-    setError(null);
-    setIsLoading(true);
-    
-    const videoId = extractVideoId(url);
-    if (!videoId) {
-      setError('Invalid YouTube URL');
-      setIsLoading(false);
-      return;
-    }
+const handleConvert = async (url: string) => {
+  setActiveResult(null);
+  setError(null);
+  setIsLoading(true);
+  
+  const videoId = extractVideoId(url);
+  if (!videoId) {
+    setError('Invalid YouTube URL');
+    setIsLoading(false);
+    return;
+  }
 
-    const WORKER_URL = 'https://yttextconverter.amar-ghodke30.workers.dev';
+  const WORKER_URL = 'https://yttextconverter.amar-ghodke30.workers.dev';
 
-    try {
-      const playerRes = await fetch(`${WORKER_URL}/player`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoId,
-          context: {
-            client: {
-              clientName: "ANDROID",
-              clientVersion: "19.09.37",
-              androidSdkVersion: 34,
-              hl: "en",
-              gl: "US"
-            }
+  try {
+    const playerRes = await fetch(`${WORKER_URL}/player`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoId,
+        contentCheckOk: true,
+        racyCheckOk: true,
+        context: {
+          client: {
+            clientName: "ANDROID",
+            clientVersion: "19.09.37",
+            androidSdkVersion: 34,
+            hl: "en",
+            gl: "US"
           }
-        })
-      });
+        }
+      })
+    });
 
-      if (!playerRes.ok) throw new Error(`Player HTTP ${playerRes.status}`);
-      const playerData = await playerRes.json();
-
+    if (!playerRes.ok) {
+      const errorText = await playerRes.text();
+      console.error('Player error response:', errorText);
+      throw new Error(`Player HTTP ${playerRes.status}: ${errorText.slice(0, 200)}`);
+    }
+    
+    const playerData = await playerRes.json();
+    
       const captions = playerData?.captions?.captionTracks;
       if (!captions || captions.length === 0) {
         throw new Error('No captions available for this video');
