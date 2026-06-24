@@ -33,18 +33,18 @@ const handleConvert = async (url: string) => {
         const playerRes = await fetch(`${WORKER_URL}/player`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            videoId,
-            context: {
-              client: {
-                clientName: "WEB_EMBEDDED_PLAYER",
-                clientVersion: "1.20240101.00.00",
-                hl: "en",
-                gl: "US",
-                platform: "DESKTOP"
+            body: JSON.stringify({
+              videoId,
+              context: {
+                client: {
+                  clientName: "ANDROID_TESTSUITE",
+                  clientVersion: "1.9",
+                  androidSdkVersion: 30,
+                  hl: "en",
+                  gl: "US"
+                }
               }
-            }
-          })
+            })
         });
 
     if (!playerRes.ok) {
