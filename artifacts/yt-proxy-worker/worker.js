@@ -50,6 +50,7 @@ export default {
 };
 
 /** POST /player — proxy a YouTube Innertube player request */
+/** POST /player — proxy a YouTube Innertube player request */
 async function proxyPlayer(request) {
   const body = await request.text();
   const ytResp = await fetch(
@@ -58,7 +59,7 @@ async function proxyPlayer(request) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": ANDROID_UA,
+        "User-Agent": BROWSER_UA, // <-- CHANGED FROM ANDROID_UA
       },
       body,
     }
