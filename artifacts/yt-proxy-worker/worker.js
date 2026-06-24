@@ -59,7 +59,9 @@ async function proxyPlayer(request) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": BROWSER_UA, // <-- CHANGED FROM ANDROID_UA
+        "User-Agent": BROWSER_UA,
+        "Origin": "https://www.youtube.com",
+        "Referer": "https://www.youtube.com/embed/" + JSON.parse(body).videoId,
       },
       body,
     }
