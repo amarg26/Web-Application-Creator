@@ -49,8 +49,8 @@ export default {
   },
 };
 
-/** POST /player — proxy a YouTube Innertube player request */
-/** POST /player — proxy a YouTube Innertube player request */
+const ANDROID_TESTSUITE_UA = "com.google.android.youtube/1.9 (Linux; U; Android 11; en_US)";
+
 async function proxyPlayer(request) {
   const body = await request.text();
   const ytResp = await fetch(
@@ -59,9 +59,7 @@ async function proxyPlayer(request) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": BROWSER_UA,
-        "Origin": "https://www.youtube.com",
-        "Referer": "https://www.youtube.com/embed/" + JSON.parse(body).videoId,
+        "User-Agent": ANDROID_TESTSUITE_UA,
       },
       body,
     }
